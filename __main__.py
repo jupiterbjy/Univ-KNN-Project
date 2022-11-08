@@ -28,10 +28,10 @@ def main():
 
         # 결과 출력. 이때 Numpy 배열을 사용하였으므로 승선자 ID도 float형이 되있으니 형변환 + 자릿수 4자리로 고정
         # 반환값이 1이면 생존, 0이면 사망 출력
-        print(f"Passenger {int(passenger_id):4} estimated as {'survived' if result else 'deceased'}")
+        print(f"Passenger {int(passenger_id):4} estimated as {'Survived O' if result else 'Deceased X'}")
 
     # 예측된 생존자 / 사망자 수 출력
-    print(f"Total estimated survivor: {total[0]} / Deceased: {total[1]}")
+    print(f"Total estimated Survivor: {total[0]} / Deceased: {total[1]}")
 
 
 if __name__ == '__main__':
