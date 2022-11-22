@@ -4,34 +4,35 @@ Fallback ML project
 Titanic survivor prediction project
 """
 
-from knn_class import KNN
+import multiprocessing as mp
+
+from loguru import logger
+
+from Algorithms import knn, logistic_regression, dnn
 from dataset import *
 
 
 def main():
-    k = 7
-    network = KNN(k, train_data, train_label)
+    # 데이터 정보 출력
+    logger.info(f"Data preprocessing done - Train set: {len(train_x)} / Test set: {len(test_x)}")
 
-    print(f"{k}-nn Network test start")
+    # KNN 테스트
+    res_1nn = mp.Process(target=knn.test, args=(train_x, train_y, test_x, test_y, 1))
+    res_7nn = mp.Process(target=knn.test, args=(train_x, train_y, test_x, test_y, 7))
 
-    # 생존자 / 사망자 수 카운터
-    total = [0, 0]
+    # Logistic Regression 테스트
+    res_ll = mp.Process(target=logistic_regression.test, args=(train_x, train_y, test_x, test_y, 100, 0.001))
 
-    # Dataframe 을 Iteration - 첫 값으로 인덱스가 추가되니 별도로 받음
-    for passenger_id, *record in test_data:
+    processes = [res_1nn, res_7nn, res_ll]
 
-        # 가중치를 고려한 다수결을 사용하여 예측
-        result = network.majority_vote_weighted(record)
+    for process in processes:
+        process.start()
 
-        # 카운터 +1
-        total[result] += 1
+    for process in processes:
+        process.join()
 
-        # 결과 출력. 이때 Numpy 배열을 사용하였으므로 승선자 ID도 float형이 되있으니 형변환 + 자릿수 4자리로 고정
-        # 반환값이 1이면 생존, 0이면 사망 출력
-        print(f"Passenger {int(passenger_id):4} estimated as {'Survived O' if result else 'Deceased X'}")
-
-    # 예측된 생존자 / 사망자 수 출력
-    print(f"Total estimated Survivor: {total[0]} / Deceased: {total[1]}")
+    # DNN 테스트
+    print("b")
 
 
 if __name__ == '__main__':

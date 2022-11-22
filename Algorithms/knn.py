@@ -2,10 +2,10 @@
 KNN Implementation
 """
 
-from typing import Tuple, List
-from collections import Counter
+from typing import Tuple, List, Sequence
 
 import numpy as np
+from loguru import logger
 
 
 class KNN:
@@ -48,20 +48,7 @@ class KNN:
         # sort via distance, and slice first k records
         return sorted(target_dist_pairs, key=lambda x: x[-1])[:self.k]
 
-    # def majority_vote(self, point) -> int:
-    #     """Determines class by given points via majority vote.
-    #
-    #     Args:
-    #         point: new unclassified point(data)
-    #
-    #     Returns:
-    #         Classification result
-    #     """
-    #
-    #     # counts how many target appeared, then get most common class(target).
-    #     return Counter((tgt for tgt, _ in self.get_knn(point))).most_common(1)[0][0]
-
-    def majority_vote_weighted(self, point) -> int:
+    def predict(self, point) -> int:
         """Determines class by given points via weighted majority vote.
 
         Args:
@@ -74,7 +61,45 @@ class KNN:
 
         # add up inverse distance for each different classes(targets).
         for target, dist in self.get_knn(point):
-            counter[target] = counter.setdefault(target, 0) + (1/dist)
+
+            # dist could be 1, add dummy value
+            counter[target] = counter.setdefault(target, 0) + (1 / (dist + 1e-6))
 
         # sort the dictionary, and fetch last(largest) element.
         return sorted(counter.items(), key=lambda x: x[1])[-1][0]
+
+
+def test(train_x: Sequence, train_y: Sequence, test_x: Sequence, test_y: Sequence, k: int):
+    """주어진 K 값에 따른 KNN 네트워크로 테스트 후 정답률 반환.
+    멀티프로세싱에 쓰기 좋게 별도의 함수로 분리.
+
+    Args:
+        train_x:
+        train_y:
+        test_x:
+        test_y:
+        k:
+
+    Returns:
+        (코스트, 정확도) - 여기에 코스트는 없으므로 빈 리스트.
+    """
+
+    logger.debug(f"{k}-nn Network Test start")
+
+    net = KNN(k, train_x, train_y)
+
+    # 정답 수
+    hits = 0
+
+    # 테스트 수행
+    for x, y in zip(test_x, test_y):
+
+        # 가중치를 고려한 다수결을 사용하여 예측 후 카운터 +1
+        if net.predict(x) == y:
+            hits += 1
+
+    # 정확도 계산 및 출력 후 반환
+    accuracy = hits / len(test_y)
+    logger.debug(f"{k}-nn Network Test done, acc: {accuracy * 100:.2f}%")
+
+    return [], accuracy
