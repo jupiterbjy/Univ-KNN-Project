@@ -21,7 +21,7 @@ def main():
     res_7nn = mp.Process(target=knn.test, args=(train_x, train_y, test_x, test_y, 7))
 
     # Logistic Regression 테스트
-    res_ll = mp.Process(target=logistic_regression.test, args=(train_x, train_y, test_x, test_y, 100, 0.001))
+    res_ll = mp.Process(target=logistic_regression.test, args=(train_x, train_y, test_x, test_y, 1000, 0.001))
 
     processes = [res_1nn, res_7nn, res_ll]
 
