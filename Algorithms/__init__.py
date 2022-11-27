@@ -26,7 +26,7 @@ class NetworkABC:
     def cost(h, y) -> float:
         pass
 
-    def predict(self, x) -> float:
+    def predict(self, x):
         raise NotImplementedError
 
     def train(self) -> float:
@@ -49,7 +49,7 @@ def repeat_training(net: NetworkABC, epochs: int, log_interval: int = 100) -> Li
     net_type = net.name
 
     # 주어진 학습 횟수의 자릿수 계산. 순전히 보기 예쁘게 하기 위함.
-    digit = len(str(log_interval))
+    digit = len(str(epochs))
 
     # epoch 당 비용 평균 저장할 리스트
     costs = []

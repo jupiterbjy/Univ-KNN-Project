@@ -64,6 +64,7 @@ class LogisticRegression(NetworkABC):
         Returns:
             예측값
         """
+
         return self.sigmoid(np.dot(self.w.T, x))
 
     def gradient_decent(self):

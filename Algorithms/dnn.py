@@ -12,7 +12,7 @@ from . import NetworkABC, repeat_training, validate, draw_loss
 
 
 class DNN(NetworkABC):
-    def __init__(self, input_data, target_output, hidden_count, hidden_size, learn_rate, momentum=0.9):
+    def __init__(self, input_data, target_output, hidden_count, hidden_size, learn_rate, momentum=0.9, batch_size=10):
         """[Affine -> ReLU] -> Softmax 신경망 구현 클래스.
         [Affine -> ReLU] 계층의 수를 자유롭게 조절 가능.
 
@@ -23,23 +23,25 @@ class DNN(NetworkABC):
             hidden_size: 히든 레이어 차원
             learn_rate: 학습률
             momentum: Momentum 최적화 알고리즘에 쓰일 관성 배율
+            batch_size: 미니 배치 크기
         """
 
-        self.xs = input_data
-        self.ys = target_output
+        self.xs: np.ndarray = input_data
+        self.ys = np.expand_dims(target_output, axis=1)
+        self.batch_size = batch_size
 
         # 입력, 출력 크기 저장
         self.input_size = len(self.xs[0])
         self.output_size = 1
 
         # 히든 레이어 크기를 담는 배열. 가독성을 위해 이름 붙임.
-        self.hidden_sizes = list(itertools.repeat(hidden_size, hidden_count))
+        # 실제 생기는 Affine 층 수는 +1 개 이므로 -1을 미리 함.
+        self.hidden_sizes = list(itertools.repeat(hidden_size, hidden_count - 1))
 
-        # TODO: 다른 가중치 초기화 방법 사용
-        # 가중치 배열 초기화. 계층 수가 고정이 아니므로 제너레이터 구문 사용.
+        # 가중치 배열 초기화. 계층 수가 고정이 아니므로 제너레이터 구문 사용. 이때 He 초기화 사용.
         # Python 3.10 부터 추가된 itertools.pairwise 를 사용해 2개씩 묶어서 행렬을 만듦.
         self.ws = [
-            np.random.randn(size_1, size_2)
+            np.random.randn(size_1, size_2) / np.sqrt(2 / size_1)
             for size_1, size_2 in itertools.pairwise(
                 (self.input_size, *self.hidden_sizes, self.output_size)
             )
@@ -53,19 +55,22 @@ class DNN(NetworkABC):
         # Affine 레이어 생성
         self.weighted_layers = [Affine(w, b) for w, b in zip(self.ws, self.bs)]
 
-        # Affine 사이에 ReLU를 끼워 넣은 리스트 생성
+        # Affine 사이에 Dropout, ReLU를 끼워 넣은 리스트 생성
         self.layers = []
         for layer in self.weighted_layers:
-            self.layers.extend((layer, ReLU()))
+            self.layers.extend((layer, LeakyReLU(), Dropout()))
 
-        # 리스트 맨 마지막에 남는 ReLU 제거
-        self.layers.pop()
+        # 리스트 맨 마지막에 남는 Dropout 제거
+        self.layers = self.layers[:-2]
 
         # Softmax 를 최하위 계층으로 사용
         self.layer_last = Softmax()
 
         # 죄적화에 Momentum 사용
-        self.optimizer = Momentum(self.ws, learn_rate, momentum)
+        self.optimizer = Momentum(self.ws, self.bs, learn_rate, momentum)
+
+        # 학습 중인지 나타 내는 플래그. Dropout 에 사용.
+        self.training_mode = True
 
     @property
     def structure(self):
@@ -95,10 +100,37 @@ class DNN(NetworkABC):
         return -np.sum(y * np.log(h + 1e-7))
 
     def predict(self, x) -> float:
-        for layer in self.layers:
-            x = layer.forward(x)
+        """입력 값을 받아 모델의 예측값 반환.
 
-        return x
+        Args:
+            x: 입력값
+
+        Returns:
+            예측값
+        """
+
+        for layer in self.layers:
+            x = layer.forward(x, self.training_mode)
+
+        # 계산 과정상 출력이 [1] [0] 등 배열로 감싸지기 때문에 따로 빼냄.
+        return x[0]
+
+    def forward(self, x):
+        """순전파 과정.
+        위의 predict 함수와 차이는 softmax 계층을 쓰는지, np.squeeze 를 하는지 여부.
+        본래 predict 함수로 최대한 해보려 했으나, 이를 위해 다른 부분들이 복잡해져서 분리.
+
+        Args:
+            x:
+
+        Returns:
+            예측값
+        """
+
+        for layer in self.layers:
+            x = layer.forward(x, self.training_mode)
+
+        return self.layer_last.forward(x)
 
     def optimize(self, x, y) -> float:
         """최적화 함수. 여기선 Momentum 을 사용.
@@ -112,8 +144,8 @@ class DNN(NetworkABC):
         """
 
         # 순전파
-        h = self.predict(x)
-        cost = self.cost(self.layer_last.forward(h), y)
+        h = self.forward(x)
+        cost = self.cost(h, y)
 
         # 역전파
         dout = self.layer_last.backward(1, y)
@@ -137,7 +169,11 @@ class DNN(NetworkABC):
             전체 학습 데이터의 비용 평균 반환
         """
 
-        return np.mean([self.optimize(x, y) for x, y in zip(self.xs, self.ys)])
+        batch_mask = np.random.choice(self.xs.shape[0], self.batch_size)
+        x_batch = self.xs[batch_mask]
+        y_batch = self.ys[batch_mask]
+
+        return self.optimize(x_batch, y_batch)
 
 
 class Module:
@@ -155,30 +191,37 @@ class Module:
         raise NotImplementedError
 
 
-class ReLU(Module):
-    # 교재 '밑바닥부터 시작하는 딥러닝' 기반
+# -------------------------------
+# 이하 모듈 정의
+# 교재 '밑바닥부터 시작하는 딥러닝' 기반
+
+class LeakyReLU(Module):
+    """Leaky Rectified Linear Unit 구현."""
 
     def __init__(self):
         self.mask: Union[np.ndarray, None] = None
 
-    def forward(self, x) -> np.ndarray:
+    def forward(self, x, *_) -> np.ndarray:
         self.mask = (x <= 0)
 
         out = x.copy()
-        out[self.mask] = 0
+        out[self.mask] *= 0.001
         return out
 
     def backward(self, dout) -> np.ndarray:
         dout[self.mask] = 0
-        # ^ dx
+        dout[~self.mask] = 0.001
+
         return dout
 
 
 class Sigmoid(Module):
+    """Sigmoid 구현 - 사용하지 않음"""
+
     def __init__(self):
         self.out: Union[np.ndarray, None] = None
 
-    def forward(self, x) -> np.ndarray:
+    def forward(self, x, *_) -> np.ndarray:
         self.out = 1 / (1 + np.exp(-x))
         return self.out
 
@@ -189,6 +232,8 @@ class Sigmoid(Module):
 
 
 class Affine(Module):
+    """Affine 구현 (Dense?)"""
+
     def __init__(self, weight: np.ndarray, bias: np.ndarray):
         self.w = weight
         self.b = bias
@@ -198,7 +243,7 @@ class Affine(Module):
         self.dw: Union[np.ndarray, None] = None
         self.db: Union[np.ndarray, None] = None
 
-    def forward(self, x) -> np.ndarray:
+    def forward(self, x, *_) -> np.ndarray:
         self.x = x
         out = np.dot(x, self.w) + self.b
 
@@ -213,7 +258,7 @@ class Affine(Module):
 
 
 class Softmax(Module):
-    """Softmax 구현 모듈. 인터페이스를 다른 네트워크와 통일하기 위해
+    """Softmax 구현. 인터페이스를 다른 네트워크와 통일하기 위해
     비용 계산 부분을 제거."""
     def __init__(self):
         self.y: Union[np.ndarray, None] = None
@@ -225,22 +270,46 @@ class Softmax(Module):
         exp = np.exp(x - np.max(x))
         return exp / np.sum(exp)
 
-    def forward(self, x) -> np.ndarray:
+    def forward(self, x, *_) -> np.ndarray:
         self.y = self.softmax(x)
 
         return self.y
 
     def backward(self, dout, t) -> np.ndarray:
-        dx = (self.y - t)
+        batch_size = t.shape[0]
+        dx = (self.y - t) / batch_size
 
         return dx
 
 
+class Dropout(Module):
+    """Dropout 구현"""
+
+    def __init__(self, dropout_rate=0.5):
+        self.drop_r = dropout_rate
+        self.mask: Union[np.ndarray, None] = None
+
+    def forward(self, x, training) -> np.ndarray:
+        if training:
+            self.mask = np.random.rand(*x.shape) > self.drop_r
+            return x * self.mask
+
+        return x * (1.0 - self.drop_r)
+
+    def backward(self, dout) -> np.ndarray:
+        return dout * self.mask
+
+
 class Momentum:
-    def __init__(self, params, learning_rate=0.01, momentum=0.9):
+    """Momentum optimizer 구현"""
+
+    def __init__(self, weights, biases, learning_rate=0.01, momentum=0.9):
         self.lr = learning_rate
         self.moment = momentum
-        self.v = [np.zeros_like(param) for param in params]
+
+        # 가중치, 편향 각각의 속도를 분리해 저장
+        self.v_w = [np.zeros_like(w) for w in weights]
+        self.v_b = [np.zeros_like(b) for b in biases]
 
     def update(self, weights, grads_w, biases, grads_b):
         """가중치 & 편향 갱신 함수
@@ -256,10 +325,12 @@ class Momentum:
         """
 
         # 가중치 & 편향 갱신
-        for params, grads in zip((weights, biases), (grads_w, grads_b)):
-            for idx, (vel, grad) in enumerate(zip(self.v, grads)):
-                self.v[idx] = self.moment * vel - self.lr * grad
-                params[idx] += self.v[idx]
+        for velocities, params, grads in zip((self.v_w, self.v_b), (weights, biases), (grads_w, grads_b)):
+            # 가중치와 편향을 따로 계산하므로 for 루프로 한번 더 감쌈
+
+            for idx, (velocity, grad) in enumerate(zip(velocities, grads)):
+                velocities[idx] = self.moment * velocity - self.lr * grad
+                params[idx] += velocities[idx]
 
 
 def test(
@@ -272,6 +343,7 @@ def test(
     epochs: int,
     lr: float,
     moment: float = 0.9,
+    batch_size: int = 10,
 ):
     """Linear Regression 네트워크로 학습 / 테스트 & 손실 그래프 저장.
     멀티프로세싱에 쓰기 좋게 별도의 함수로 분리.
@@ -286,16 +358,20 @@ def test(
         epochs: 학습 반복 수
         lr: 학습률
         moment: Momentum optimizer 에서 사용할 관성 배율
+        batch_size: 미니 배치 크기
 
     Returns:
         (네트워크 이름, 정확도)
     """
 
-    net = DNN(train_x, train_y, hidden_count, hidden_size, lr, moment)
+    net = DNN(train_x, train_y, hidden_count, hidden_size, lr, moment, batch_size)
 
     logger.info(f"DNN initialized with following structure:\n{net.structure}")
 
-    costs = repeat_training(net, epochs)
+    net.training_mode = True
+    costs = repeat_training(net, epochs, 10000)
+
+    net.training_mode = False
     accuracy = validate(net, test_x, test_y)
 
     draw_loss(net, costs)

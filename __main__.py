@@ -17,7 +17,7 @@ def main():
         f"Training data set #: {len(train_x)} / Test data set #: {len(test_x)}"
     )
 
-    t = dnn.test(train_x, train_y, test_x, test_y, 3, 7, 100, 0.01)
+    t = dnn.test(train_x, train_y, test_x, test_y, 3, 7, 10000000, 0.0000001, 0.7, 100)
 
     # 테스트 목록 작성 [(함수, (인자들)), ...}
     tests = [
@@ -25,6 +25,7 @@ def main():
         (knn.test, (train_x, train_y, test_x, test_y, 7)),
         (linear_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
         (logistic_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
+        (dnn.test, (train_x, train_y, test_x, test_y, 3, 7, 10000000, 0.0000001, 0.7, 100)),
     ]
 
     # 병렬로 실행. 시간 절약.
