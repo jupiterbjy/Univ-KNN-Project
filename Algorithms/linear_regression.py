@@ -1,5 +1,5 @@
 """
-Logistic Regression 구현
+linear Regression Implementation
 """
 
 import numpy as np
@@ -7,9 +7,9 @@ import numpy as np
 from . import Network, repeat_training, validate, draw_loss
 
 
-class LogisticRegression(Network):
+class LinearRegression(Network):
     def __init__(self, input_data, target_output, learn_rate):
-        """Logistic Regression 구현 클래스
+        """Linear Regression 구현 클래스
 
         Args:
             input_data: 학습 데이터 입력 값들
@@ -22,15 +22,8 @@ class LogisticRegression(Network):
         self.ys = target_output
 
         # 학습 데이터의 입력 값 차원 길이 만큼의 0 배열로 가중치 초기화.
-        # Logistic Regression 은 신경망과 다르게 0으로 초기화.
-        # https://stackoverflow.com/a/54450038/10909029
         self.w = np.zeros(len(self.xs[0]))
         self.lr = learn_rate
-
-    @staticmethod
-    def sigmoid(x):
-        """로지스틱 함수"""
-        return 1 / (1 + np.exp(-x))
 
     @staticmethod
     def cost(h, y):
@@ -45,17 +38,14 @@ class LogisticRegression(Network):
             비용
         """
 
-        # -(1 / m) * sum([yi * log(hi) + (1 - yi) * log(1 - hi) for i in range(m)])
-        # = -mean([yi * log(hi) + (1 - yi) * log(1 - hi) for i in range(m)])
-        #          A----------     B-------------------
+        # (1 / m) * [(hi - yi) ** 2 for i in range(m)]
+        # = mean([(hi - yi) ** 2 for i in range(m)])
+        # => Mean Square Error
 
-        a = y * np.log(h)
-        b = (1 - y) * np.log(1 - h)
+        # => mean((wx-y)**2)
+        return np.mean(np.square(y - h))
 
-        # =>
-        return -np.mean(a + b)
-
-    def predict(self, x):
+    def predict(self, x) -> float:
         """입력 값을 받아 모델의 예측값 반환.
 
         Args:
@@ -64,10 +54,13 @@ class LogisticRegression(Network):
         Returns:
             예측값
         """
-        return self.sigmoid(np.dot(self.w.T, x))
+
+        # np.dot 타입 힌트가 잘못됨. ndarray 와 float 둘다 반환할 수 있어 강제로 타입 명시.
+        # noinspection PyTypeChecker
+        return np.dot(self.w.T, x)
 
     def gradient_decent(self):
-        """경사 하강법 함수. Linear Regression 과 구조적으로 동일"""
+        """경사 하강법 함수. Logistic Regression 과 구조적으로 동일"""
 
         grad = np.zeros_like(self.w)
 
@@ -78,7 +71,7 @@ class LogisticRegression(Network):
                 [(self.predict(x) - y) * x[w_idx] for x, y in zip(self.xs, self.ys)]
             )
 
-        self.w -= self.lr * grad
+        self.w -= self.lr * np.array(grad)
 
     def train(self):
         """경사 하강법을 이용해 학습을 진행하는 함수
@@ -102,7 +95,7 @@ def test(
     epochs: int,
     lr: float,
 ):
-    """Logistic Regression 네트워크로 학습 / 테스트 후 정답률 반환 & 손실 그래프 저장.
+    """Linear Regression 네트워크로 학습 / 테스트 & 손실 그래프 저장.
     멀티프로세싱에 쓰기 좋게 별도의 함수로 분리.
 
     Args:
@@ -117,7 +110,7 @@ def test(
         (네트워크 이름, 정확도)
     """
 
-    net = LogisticRegression(train_x, train_y, lr)
+    net = LinearRegression(train_x, train_y, lr)
 
     costs = repeat_training(net, epochs)
     accuracy = validate(net, test_x, test_y)

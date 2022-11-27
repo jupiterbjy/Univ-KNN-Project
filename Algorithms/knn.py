@@ -5,14 +5,20 @@ KNN Implementation
 from typing import Tuple, List, Sequence
 
 import numpy as np
-from loguru import logger
+
+from . import Network, validate, draw_loss
 
 
-class KNN:
+class KNN(Network):
     def __init__(self, k: int, features, target):
         self.k = k
         self.x = features
         self.y = target
+
+    @property
+    def name(self):
+        # override to factor in k-value
+        return f"{self.k}-NN"
 
     @staticmethod
     def dist_squared(p1, p2) -> float:
@@ -74,32 +80,18 @@ def test(train_x: Sequence, train_y: Sequence, test_x: Sequence, test_y: Sequenc
     멀티프로세싱에 쓰기 좋게 별도의 함수로 분리.
 
     Args:
-        train_x:
-        train_y:
-        test_x:
-        test_y:
-        k:
+        train_x: 학습 데이터 입력 값들
+        train_y: 학습 데이터 라벨 값들
+        test_x: 테스트 데이터 입력 값들
+        test_y: 테스트 데이터 라벨 값들
+        k: 고려할 최근접 이웃 수
 
     Returns:
-        (코스트, 정확도) - 여기에 코스트는 없으므로 빈 리스트.
+        (네트워크 이름, 정확도) - 코스트는 없으므로 빈 리스트.
     """
 
-    logger.debug(f"{k}-nn Network Test start")
-
+    # 학습할 게 없으니 바로 테스트
     net = KNN(k, train_x, train_y)
 
-    # 정답 수
-    hits = 0
-
-    # 테스트 수행
-    for x, y in zip(test_x, test_y):
-
-        # 가중치를 고려한 다수결을 사용하여 예측 후 카운터 +1
-        if net.predict(x) == y:
-            hits += 1
-
-    # 정확도 계산 및 출력 후 반환
-    accuracy = hits / len(test_y)
-    logger.debug(f"{k}-nn Network Test done, acc: {accuracy * 100:.2f}%")
-
-    return [], accuracy
+    accuracy = validate(net, test_x, test_y)
+    return net.name, accuracy

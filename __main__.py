@@ -7,33 +7,34 @@ Titanic survivor prediction project
 import multiprocessing as mp
 
 from loguru import logger
-
-from Algorithms import knn, logistic_regression, dnn
+from Algorithms import knn, logistic_regression, linear_regression, draw_accuracy
 from dataset import *
 
 
 def main():
     # 데이터 정보 출력
-    logger.info(f"Data preprocessing done - Train set: {len(train_x)} / Test set: {len(test_x)}")
+    logger.info(
+        f"Training data set #: {len(train_x)} / Test data set #: {len(test_x)}"
+    )
 
-    # KNN 테스트
-    res_1nn = mp.Process(target=knn.test, args=(train_x, train_y, test_x, test_y, 1))
-    res_7nn = mp.Process(target=knn.test, args=(train_x, train_y, test_x, test_y, 7))
+    # 테스트 목록 작성 [(함수, (인자들)), ...}
+    tests = [
+        (knn.test, (train_x, train_y, test_x, test_y, 1)),
+        (knn.test, (train_x, train_y, test_x, test_y, 7)),
+        (linear_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
+        (logistic_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
+    ]
 
-    # Logistic Regression 테스트
-    res_ll = mp.Process(target=logistic_regression.test, args=(train_x, train_y, test_x, test_y, 1000, 0.001))
+    # 병렬로 실행. 시간 절약.
+    # 이경우 디버깅 시 pool 종료 후 어느 중단점에서건 오류 발생. Pycharm 버그.
+    # https://youtrack.jetbrains.com/issue/PY-54447
+    with mp.Pool(processes=4) as pool:
+        processes = [pool.apply_async(test, arg) for (test, arg) in tests]
+        results = [p.get() for p in processes]
 
-    processes = [res_1nn, res_7nn, res_ll]
-
-    for process in processes:
-        process.start()
-
-    for process in processes:
-        process.join()
-
-    # DNN 테스트
-    print("b")
+    # 정확도 종합
+    draw_accuracy(*results)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

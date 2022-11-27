@@ -2,3 +2,5 @@ numpy
 pandas
 loguru
 tqdm
+matplotlib
+seaborn
