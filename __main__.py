@@ -7,7 +7,7 @@ Titanic survivor prediction project
 import multiprocessing as mp
 
 from loguru import logger
-from Algorithms import knn, logistic_regression, linear_regression, draw_accuracy
+from Algorithms import knn, dnn, logistic_regression, linear_regression, draw_accuracy
 from dataset import *
 
 
@@ -16,6 +16,8 @@ def main():
     logger.info(
         f"Training data set #: {len(train_x)} / Test data set #: {len(test_x)}"
     )
+
+    t = dnn.test(train_x, train_y, test_x, test_y, 3, 7, 100, 0.01)
 
     # 테스트 목록 작성 [(함수, (인자들)), ...}
     tests = [

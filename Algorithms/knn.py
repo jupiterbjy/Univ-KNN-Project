@@ -6,10 +6,10 @@ from typing import Tuple, List, Sequence
 
 import numpy as np
 
-from . import Network, validate, draw_loss
+from . import NetworkABC, validate, draw_loss
 
 
-class KNN(Network):
+class KNN(NetworkABC):
     def __init__(self, k: int, features, target):
         self.k = k
         self.x = features

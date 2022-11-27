@@ -15,8 +15,8 @@ from loguru import logger
 GRAPH = pathlib.Path(__file__).parent.parent / "graph"
 
 
-class Network:
-    """기계 학습 네트워크의 베이스 클래스."""
+class NetworkABC:
+    """기계 학습 네트워크의 추상 베이스 클래스."""
 
     @property
     def name(self):
@@ -27,13 +27,13 @@ class Network:
         pass
 
     def predict(self, x) -> float:
-        pass
+        raise NotImplementedError
 
     def train(self) -> float:
         pass
 
 
-def repeat_training(net: Network, epochs: int, log_interval: int = 100) -> List[float]:
+def repeat_training(net: NetworkABC, epochs: int, log_interval: int = 100) -> List[float]:
     """주기적으로 로깅을 하며 반복 학습
 
     Args:
@@ -71,7 +71,7 @@ def repeat_training(net: Network, epochs: int, log_interval: int = 100) -> List[
     return costs
 
 
-def validate(net: Network, test_x, test_y) -> float:
+def validate(net: NetworkABC, test_x, test_y) -> float:
     """테스트 데이터를 가지고 정확도 계산.
     모델이 반환한 예측 값을 반올림 하여 라벨과 비교.
 
@@ -103,7 +103,7 @@ def validate(net: Network, test_x, test_y) -> float:
     return accuracy
 
 
-def draw_loss(net: Network, cost: List[float]):
+def draw_loss(net: NetworkABC, cost: List[float]):
     """코스트 값 추이 그래프를 그려 파일로 저장.
     여러 함수를 묶어서 그릴 생각을 했지만, KNN 때문에 개별 그리기로 결정.
 
@@ -127,7 +127,7 @@ def draw_loss(net: Network, cost: List[float]):
     logger.info(f"Saved {net_type} loss figure to '{path_.as_posix()}'")
 
 
-def draw_accuracy(*net_accuracy_pair: Tuple[Network, float]):
+def draw_accuracy(*net_accuracy_pair: Tuple[NetworkABC, float]):
     """주어진 모델들과 정확도들을 하나의 그래프로 그려서 저장.
 
     Args:

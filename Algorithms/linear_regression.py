@@ -1,13 +1,13 @@
 """
-linear Regression Implementation
+linear Regression 구현체
 """
 
 import numpy as np
 
-from . import Network, repeat_training, validate, draw_loss
+from . import NetworkABC, repeat_training, validate, draw_loss
 
 
-class LinearRegression(Network):
+class LinearRegression(NetworkABC):
     def __init__(self, input_data, target_output, learn_rate):
         """Linear Regression 구현 클래스
 

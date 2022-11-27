@@ -4,10 +4,10 @@ Logistic Regression 구현
 
 import numpy as np
 
-from . import Network, repeat_training, validate, draw_loss
+from . import NetworkABC, repeat_training, validate, draw_loss
 
 
-class LogisticRegression(Network):
+class LogisticRegression(NetworkABC):
     def __init__(self, input_data, target_output, learn_rate):
         """Logistic Regression 구현 클래스
 
