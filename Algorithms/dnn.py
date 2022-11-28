@@ -60,10 +60,10 @@ class DNN(NetworkABC):
         self.layers = []
         for layer in self.weighted_layers:
             # self.layers.extend((layer, Sigmoid()))
-            self.layers.extend((layer, ReLU()))
+            self.layers.extend((layer, ReLU(), Dropout()))
 
         # 리스트 맨 마지막에 남는 Dropout 제거
-        self.layers = self.layers[:-1]
+        self.layers = self.layers[:-2]
 
         # Softmax 를 최하위 계층으로 사용
         self.layer_last = SoftmaxWithLoss()
