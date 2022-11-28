@@ -7,10 +7,14 @@
 from typing import List, Tuple
 import pathlib
 
+
+import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from loguru import logger
 
+# 파이참 오류 방지용
+matplotlib.use('TkAgg')
 
 GRAPH = pathlib.Path(__file__).parent.parent / "graph"
 
