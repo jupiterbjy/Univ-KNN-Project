@@ -69,8 +69,8 @@ class DNN(NetworkABC):
         self.layer_last = SoftmaxWithLoss()
 
         # 죄적화에 Momentum 사용
-        self.optimizer = SGD(learn_rate)
-        # self.optimizer = Momentum(self.ws, self.bs, learn_rate, momentum)
+        # self.optimizer = SGD(learn_rate)
+        self.optimizer = Momentum(self.ws, self.bs, learn_rate, momentum)
 
         # 학습 중인지 나타 내는 플래그. Dropout 에 사용.
         self.training_mode = True
@@ -338,12 +338,13 @@ class Momentum:
         """
 
         # 가중치 & 편향 갱신
-        for velocities, params, grads in zip((self.v_w, self.v_b), (weights, biases), (grads_w, grads_b)):
-            # 가중치와 편향을 따로 계산하므로 for 루프로 한번 더 감쌈
+        for idx, grad in enumerate(grads_w):
+            self.v_w[idx] = self.moment * self.v_w[idx] - self.lr * grad
+            weights[idx] += self.v_w[idx]
 
-            for idx, (velocity, grad) in enumerate(zip(velocities, grads)):
-                velocities[idx] = self.moment * velocity - self.lr * grad
-                params[idx] += velocities[idx]
+        for idx, grad in enumerate(grads_b):
+            self.v_b[idx] = self.moment * self.v_b[idx] - self.lr * grad
+            biases[idx] += self.v_b[idx]
 
 
 class SGD:
