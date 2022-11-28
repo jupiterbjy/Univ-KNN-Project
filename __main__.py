@@ -26,7 +26,7 @@ def main():
         (knn.test, (train_x, train_y, test_x, test_y, 7)),
         (linear_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
         (logistic_regression.test, (train_x, train_y, test_x, test_y, 1000, 0.1)),
-        (dnn.test, (train_x, train_y, test_x, test_y, 1, 7, 10000, 0.000001, 0.9, 200)),
+        (dnn.test, (train_x, train_y, test_x, test_y, 2, 7, 20000, 1e-8, 0.9, 100)),
     ]
 
     # 병렬로 실행. 시간 절약.

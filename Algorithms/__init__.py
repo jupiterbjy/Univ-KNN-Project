@@ -144,7 +144,7 @@ def draw_accuracy(*net_accuracy_pair: Tuple[NetworkABC, float]):
     axis = plt.gca()
     axis.set_ylim([0, 1])
 
-    plt.figure(figsize=(7, 4))
+    plt.figure(figsize=(8, 5))
     plt.bar(net_names, accuracies, color=colors)
     plt.ylabel("Accuracy")
 

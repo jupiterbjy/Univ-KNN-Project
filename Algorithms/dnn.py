@@ -27,7 +27,8 @@ class DNN(NetworkABC):
         """
 
         self.xs: np.ndarray = input_data
-        self.ys = np.expand_dims(target_output, axis=1)
+        # self.ys = np.expand_dims(target_output, axis=1)
+        self.ys = np.array([[0, 1] if y == 1 else [1, 0] for y in target_output])
         self.batch_size = batch_size
 
         # 입력, 출력 크기 저장
@@ -59,7 +60,7 @@ class DNN(NetworkABC):
         self.layers = []
         for layer in self.weighted_layers:
             # self.layers.extend((layer, Sigmoid()))
-            self.layers.extend((layer, Sigmoid()))
+            self.layers.extend((layer, ReLU()))
 
         # 리스트 맨 마지막에 남는 Dropout 제거
         self.layers = self.layers[:-1]
@@ -100,7 +101,7 @@ class DNN(NetworkABC):
 
         return 0.5 * np.sum((h - y) ** 2)
 
-    def predict(self, x) -> float:
+    def predict(self, x):
         """입력 값을 받아 모델의 예측값 반환.
 
         Args:
@@ -113,8 +114,7 @@ class DNN(NetworkABC):
         for layer in self.layers:
             x = layer.forward(x, self.training_mode)
 
-        # 계산 과정상 출력이 [1] [0] 등 배열로 감싸지기 때문에 따로 빼냄.
-        return x[0]
+        return np.argmax(x)
 
     def forward(self, x, t):
         """순전파 과정.
@@ -122,11 +122,11 @@ class DNN(NetworkABC):
         본래 predict 함수로 최대한 해보려 했으나, 이를 위해 다른 부분들이 복잡해져서 분리.
 
         Args:
-            x:
-            t:
+            x: 입력값
+            t: 라벨값
 
         Returns:
-            예측값
+            오차
         """
 
         for layer in self.layers:
@@ -204,7 +204,7 @@ class Module:
 # 이하 모듈 정의
 # 교재 '밑바닥부터 시작하는 딥러닝' 기반
 
-class LeakyReLU(Module):
+class ReLU(Module):
     """Leaky Rectified Linear Unit 구현."""
 
     def __init__(self):
@@ -214,11 +214,11 @@ class LeakyReLU(Module):
         self.mask = (x <= 0)
 
         out = x.copy()
-        out[self.mask] *= 0.001
+        out[self.mask] = 0
         return out
 
     def backward(self, dout) -> np.ndarray:
-        dout[self.mask] = 0.001
+        dout[self.mask] = 0
 
         return dout
 
@@ -353,11 +353,11 @@ class SGD:
     def update(self, weights, grads_w, biases, grads_b):
 
         # 가중치 & 편향 갱신
-        for params, grads in zip((weights, biases), (grads_w, grads_b)):
-            # 가중치와 편향을 따로 계산하므로 for 루프로 한번 더 감쌈
+        for idx, grad in enumerate(grads_w):
+            weights[idx] -= grad * self.lr
 
-            for param, grad in zip(params, grads):
-                param -= grad * self.lr
+        for idx, grad in enumerate(grads_b):
+            biases[idx] -= grad * self.lr
 
 
 def test(
@@ -396,7 +396,7 @@ def test(
     logger.info(f"DNN initialized with following structure:\n{net.structure}")
 
     net.training_mode = True
-    costs = repeat_training(net, epochs, 1000)
+    costs = repeat_training(net, epochs, epochs // 10)
 
     net.training_mode = False
     accuracy = validate(net, test_x, test_y)
