@@ -32,7 +32,7 @@ class DNN(NetworkABC):
 
         # 입력, 출력 크기 저장
         self.input_size = len(self.xs[0])
-        self.output_size = 1
+        self.output_size = 2
 
         # 히든 레이어 크기를 담는 배열. 가독성을 위해 이름 붙임.
         # 실제 생기는 Affine 층 수는 +1 개 이므로 -1을 미리 함.
@@ -58,16 +58,18 @@ class DNN(NetworkABC):
         # Affine 사이에 Dropout, ReLU를 끼워 넣은 리스트 생성
         self.layers = []
         for layer in self.weighted_layers:
-            self.layers.extend((layer, LeakyReLU(), Dropout()))
+            # self.layers.extend((layer, Sigmoid()))
+            self.layers.extend((layer, Sigmoid()))
 
         # 리스트 맨 마지막에 남는 Dropout 제거
-        self.layers = self.layers[:-2]
+        self.layers = self.layers[:-1]
 
         # Softmax 를 최하위 계층으로 사용
-        self.layer_last = Softmax()
+        self.layer_last = SoftmaxWithLoss()
 
         # 죄적화에 Momentum 사용
-        self.optimizer = Momentum(self.ws, self.bs, learn_rate, momentum)
+        self.optimizer = SGD(learn_rate)
+        # self.optimizer = Momentum(self.ws, self.bs, learn_rate, momentum)
 
         # 학습 중인지 나타 내는 플래그. Dropout 에 사용.
         self.training_mode = True
@@ -86,7 +88,7 @@ class DNN(NetworkABC):
 
     @staticmethod
     def cost(h, y) -> float:
-        """교차 엔트로피 오차 (Cross Entropy Error)를 구하는 함수.
+        """오차 제곱합 비용 함수.
 
         Args:
             h: 모델의 예측값
@@ -96,8 +98,7 @@ class DNN(NetworkABC):
             비용
         """
 
-        # log(0) 을 막기 위해 작은 값(델타) 더하기
-        return -np.sum(y * np.log(h + 1e-7))
+        return 0.5 * np.sum((h - y) ** 2)
 
     def predict(self, x) -> float:
         """입력 값을 받아 모델의 예측값 반환.
@@ -115,13 +116,14 @@ class DNN(NetworkABC):
         # 계산 과정상 출력이 [1] [0] 등 배열로 감싸지기 때문에 따로 빼냄.
         return x[0]
 
-    def forward(self, x):
+    def forward(self, x, t):
         """순전파 과정.
         위의 predict 함수와 차이는 softmax 계층을 쓰는지, np.squeeze 를 하는지 여부.
         본래 predict 함수로 최대한 해보려 했으나, 이를 위해 다른 부분들이 복잡해져서 분리.
 
         Args:
             x:
+            t:
 
         Returns:
             예측값
@@ -130,7 +132,7 @@ class DNN(NetworkABC):
         for layer in self.layers:
             x = layer.forward(x, self.training_mode)
 
-        return self.layer_last.forward(x)
+        return self.layer_last.forward(x, t)
 
     def optimize(self, x, y) -> float:
         """최적화 함수. 여기선 Momentum 을 사용.
@@ -144,11 +146,11 @@ class DNN(NetworkABC):
         """
 
         # 순전파
-        h = self.forward(x)
-        cost = self.cost(h, y)
+        h = self.forward(x, y)
+        cost = self.cost(h, y) / self.batch_size
 
         # 역전파
-        dout = self.layer_last.backward(1, y)
+        dout = self.layer_last.backward(1)
         for layer in reversed(self.layers):
             dout = layer.backward(dout)
 
@@ -169,11 +171,18 @@ class DNN(NetworkABC):
             전체 학습 데이터의 비용 평균 반환
         """
 
-        batch_mask = np.random.choice(self.xs.shape[0], self.batch_size)
-        x_batch = self.xs[batch_mask]
-        y_batch = self.ys[batch_mask]
+        data_length = self.xs.shape[0]
 
-        return self.optimize(x_batch, y_batch)
+        costs = []
+
+        for _ in range(data_length // self.batch_size):
+            batch_mask = np.random.choice(data_length, self.batch_size)
+            x_batch = self.xs[batch_mask]
+            y_batch = self.ys[batch_mask]
+
+            costs.append(self.optimize(x_batch, y_batch))
+
+        return np.mean(costs)
 
 
 class Module:
@@ -209,8 +218,7 @@ class LeakyReLU(Module):
         return out
 
     def backward(self, dout) -> np.ndarray:
-        dout[self.mask] = 0
-        dout[~self.mask] = 0.001
+        dout[self.mask] = 0.001
 
         return dout
 
@@ -257,11 +265,15 @@ class Affine(Module):
         return dx
 
 
-class Softmax(Module):
-    """Softmax 구현. 인터페이스를 다른 네트워크와 통일하기 위해
-    비용 계산 부분을 제거."""
+class SoftmaxWithLoss(Module):
+    """Softmax 에 교차 크로스 엔트로피 구현"""
     def __init__(self):
         self.y: Union[np.ndarray, None] = None
+        self.t: Union[np.ndarray, None] = None
+
+    @staticmethod
+    def cross_entropy_err(h, y):
+        return -np.sum(y * np.log(h + 1e-7))
 
     @staticmethod
     def softmax(x):
@@ -270,14 +282,15 @@ class Softmax(Module):
         exp = np.exp(x - np.max(x))
         return exp / np.sum(exp)
 
-    def forward(self, x, *_) -> np.ndarray:
+    def forward(self, x, t) -> np.ndarray:
+        self.t = t
         self.y = self.softmax(x)
 
-        return self.y
+        return self.cross_entropy_err(self.y, t)
 
-    def backward(self, dout, t) -> np.ndarray:
-        batch_size = t.shape[0]
-        dx = (self.y - t) / batch_size
+    def backward(self, dout=1) -> np.ndarray:
+        batch_size = self.t.shape[0]
+        dx = (self.y - self.t) / batch_size
 
         return dx
 
@@ -333,6 +346,20 @@ class Momentum:
                 params[idx] += velocities[idx]
 
 
+class SGD:
+    def __init__(self, learning_rate):
+        self.lr = learning_rate
+
+    def update(self, weights, grads_w, biases, grads_b):
+
+        # 가중치 & 편향 갱신
+        for params, grads in zip((weights, biases), (grads_w, grads_b)):
+            # 가중치와 편향을 따로 계산하므로 for 루프로 한번 더 감쌈
+
+            for param, grad in zip(params, grads):
+                param -= grad * self.lr
+
+
 def test(
     train_x: np.ndarray,
     train_y: np.ndarray,
@@ -369,7 +396,7 @@ def test(
     logger.info(f"DNN initialized with following structure:\n{net.structure}")
 
     net.training_mode = True
-    costs = repeat_training(net, epochs, 10000)
+    costs = repeat_training(net, epochs, 1000)
 
     net.training_mode = False
     accuracy = validate(net, test_x, test_y)
