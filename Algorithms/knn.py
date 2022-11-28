@@ -45,7 +45,7 @@ class KNN(NetworkABC):
             p: point
 
         Returns:
-            List of (class, distance).
+            List of (class, distance)
         """
 
         # pair (target, distance) for each trained point against given point.

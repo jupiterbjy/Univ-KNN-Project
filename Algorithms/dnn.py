@@ -147,7 +147,7 @@ class DNN(NetworkABC):
 
         # 순전파
         h = self.forward(x, y)
-        cost = self.cost(h, y) / self.batch_size
+        cost = self.cost(h, y)
 
         # 역전파
         dout = self.layer_last.backward(1)
@@ -273,7 +273,14 @@ class SoftmaxWithLoss(Module):
 
     @staticmethod
     def cross_entropy_err(h, y):
-        return -np.sum(y * np.log(h + 1e-7))
+        # return -np.sum(y * np.log(h + 1e-7))
+        if h.ndim == 1:
+            h = h.reshape(1, h.size)
+            y = y.reshape(1, y.size)
+
+        size = h.shape[0]
+
+        return -np.sum(y*np.log(h + 1e-7))/size
 
     @staticmethod
     def softmax(x):
